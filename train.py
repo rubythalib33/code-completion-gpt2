@@ -4,7 +4,7 @@ from transformers.keras_callbacks import PushToHubCallback
 from dataset import tokenizer, context_length, tokenized_datasets
 import os
 
-DEVICE = "tpu"
+DEVICE = "gpu"
 BATCH_SIZE = 1024 if DEVICE == "tpu" else 32
 EPOCHS = 1
 
