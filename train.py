@@ -5,8 +5,8 @@ from dataset import tokenizer, context_length, tokenized_datasets
 import os
 
 DEVICE = "tpu"
-BATCH_SIZE = 1024
-EPOCHS = 10
+BATCH_SIZE = 1024 if DEVICE == "tpu" else 32
+EPOCHS = 1
 
 def tpu_init():
     assert 'COLAB_TPU_ADDR' in os.environ, 'Missing TPU; did you request a TPU in Notebook Settings?'
@@ -57,8 +57,19 @@ tf_eval_dataset = tokenized_datasets["valid"].to_tf_dataset(
 )
 
 num_train_steps = len(tf_train_dataset)
-strategy = tpu_init()
-with strategy.scope():
+if DEVICE == "tpu":
+    strategy = tpu_init()
+    with strategy.scope():
+        optimizer, schedule = create_optimizer(
+            init_lr=5e-5,
+            num_warmup_steps=1_000,
+            num_train_steps=num_train_steps,
+            weight_decay_rate=0.01,
+        )
+        model = TFGPT2LMHeadModel(config)
+        model(model.dummy_inputs)  # Builds the model
+        model.compile(optimizer=optimizer)
+else:
     optimizer, schedule = create_optimizer(
         init_lr=5e-5,
         num_warmup_steps=1_000,
@@ -71,7 +82,8 @@ with strategy.scope():
 model.summary()
 
 # Train in mixed-precision float16
-# tf.keras.mixed_precision.set_global_policy("mixed_float16")
+if DEVICE == "gpu":
+    tf.keras.mixed_precision.set_global_policy("mixed_float16")
 
 callback = PushToHubCallback(output_dir="codeparrot-ds-gpt2", tokenizer=tokenizer)
 
