@@ -5,7 +5,7 @@ from dataset import tokenizer, context_length, tokenized_datasets
 import os
 
 DEVICE = "tpu"
-BATCH_SIZE = 1024 if DEVICE == "tpu" else 32
+BATCH_SIZE = 1024
 EPOCHS = 10
 
 def tpu_init():
@@ -47,33 +47,31 @@ tf_train_dataset = tokenized_datasets["train"].to_tf_dataset(
     columns=["input_ids", "attention_mask", "labels"],
     collate_fn=data_collator,
     shuffle=True,
-    batch_size=32,
+    batch_size=BATCH_SIZE,
 )
 tf_eval_dataset = tokenized_datasets["valid"].to_tf_dataset(
     columns=["input_ids", "attention_mask", "labels"],
     collate_fn=data_collator,
     shuffle=False,
-    batch_size=32,
+    batch_size=BATCH_SIZE,
 )
 
 num_train_steps = len(tf_train_dataset)
-optimizer, schedule = create_optimizer(
-    init_lr=5e-5,
-    num_warmup_steps=1_000,
-    num_train_steps=num_train_steps,
-    weight_decay_rate=0.01,
-)
-
-if DEVICE == "tpu":
-    strategy = tpu_init()
-    with strategy.scope():
-        model = TFGPT2LMHeadModel(config)
-        model(model.dummy_inputs)  # Builds the model
-        model.compile(optimizer=optimizer)
+strategy = tpu_init()
+with strategy.scope():
+    optimizer, schedule = create_optimizer(
+        init_lr=5e-5,
+        num_warmup_steps=1_000,
+        num_train_steps=num_train_steps,
+        weight_decay_rate=0.01,
+    )
+    model = TFGPT2LMHeadModel(config)
+    model(model.dummy_inputs)  # Builds the model
+    model.compile(optimizer=optimizer)
 model.summary()
 
 # Train in mixed-precision float16
-tf.keras.mixed_precision.set_global_policy("mixed_float16")
+# tf.keras.mixed_precision.set_global_policy("mixed_float16")
 
 callback = PushToHubCallback(output_dir="codeparrot-ds-gpt2", tokenizer=tokenizer)
 
